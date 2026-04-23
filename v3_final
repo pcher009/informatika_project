@@ -1,0 +1,127 @@
+import numpy as np
+import sympy as sp
+import matplotlib.pyplot as plt
+
+x = sp.symbols('x')
+
+class Ntn:
+    def fit(self, xs, ys):
+        n = len(xs)
+        a = ys.copy()
+        for j in range(1, n):
+            for i in range(n -1, j-1, -1):
+                a[i] = (a[i] - a[i - 1]) / (xs[i] - xs[i - j])
+        self.a = a
+        self.xs = xs
+
+    def expr(self, digs):
+        e = self.a[0]
+        p = 1
+        for i in range(1, len(self.a)):
+          p *= (x -self.xs[i-1])
+            e += round(float(self.a[i]), digs) * p
+        return sp.expand(e)
+
+    def fn(self, digs):
+        return sp.lambdify(x, self.expr(digs), "numpy")
+
+class Tanh:
+    def fit(self, xs, ys, g=None):
+        self.xs = np.array(xs, dtype=float)
+        self.ys = np.array(ys, dtype=float)
+        n = len(self.xs)
+        if g is None and n > 1:
+            g = n / (max(self.xs) - min(self.xs))
+        elif g is None:
+            g = 1.0
+        self.g = g
+        A = np.zeros((n, n))
+        for i in range(n):
+            for j in range(n):
+                A[i, j] = np.tanh(g * (self.xs[i] - self.xs[j]))
+        self.w = np.linalg.solve(A, self.ys)
+
+    def expr(self, digs):
+        ex = 0
+        for i in range(len(self.xs)):
+            c = round(float(self.w[i]), digs)
+            ex += c * sp.tanh(self.g * (x-self.xs[i]))
+        return ex
+
+    def fn(self, digs):
+        return sp.lambdify(x, self.expr(digs), "numpy")
+
+def rmse(yt, yp):
+    return np.sqrt(np.mean((yt - yp) ** 2))
+
+def main():
+    print("Введите координаты x через пробел:")
+    xs = list(map(float, input().split()))
+    print("Введите координаты y через пробел:")
+    ys = list(map(float, input().split()))
+
+    if len(xs) != len(ys) or len(xs) < 2:
+        print("Нужно хотя бы 2 точки.")
+        return
+
+    n = len(xs)
+    xa = np.array(xs)
+    ya = np.array(ys)
+
+    m1 = Ntn()
+    m1.fit(xs, ys)
+    e1 = m1.expr(n)
+    f1 = m1.fn(n)
+
+    m2 = Tanh()
+    m2.fit(xs, ys)
+    e2 = m2.expr(n)
+    f2 = m2.fn(n)
+
+    er1 = rmse(ya, f1(xa))
+    er2 = rmse(ya, f2(xa))
+
+    print("\nМногочлен Ньютона")
+    print("Функция (компьютерный вид):")
+    print(e1)
+    print("Функция (красивый вид):")
+    sp.pprint(e1)
+    print(f"Ошибка: {er1}")
+
+    print("\nГладкая сумма tanh")
+    print("Функция (компьютерный вид):")
+    print(e2)
+    print("Функция (красивый вид):")
+    sp.pprint(e2)
+    print(f"Ошибка: {er2}")
+
+    xp = np.linspace(min(xs) - 1, max(xs) + 1, 400)
+    yv1 = f1(xp)
+    yv2 = f2(xp)
+
+    plt.figure(figsize=(15, 5))
+
+    plt.subplot(1, 3, 1)
+    plt.plot(xs, ys, 'o-', markersize=8, linewidth=2)
+    plt.title("Точки")
+    plt.grid(True)
+
+    plt.subplot(1, 3, 2)
+    plt.plot(xp, yv1, '-', label=f'Ошибка: {er1}')
+    plt.plot(xs, ys, 'o', label='Точки')
+    plt.title("Ньютон")
+    plt.grid(True)
+    plt.legend()
+
+    plt.subplot(1, 3, 3)
+    plt.plot(xp, yv2, '-', label=f'Ошибка: {er2}')
+    plt.plot(xs, ys, 'o', label='Точки')
+    plt.title("Tanh")
+    plt.grid(True)
+    plt.legend()
+
+    plt.tight_layout()
+    plt.show()
+
+if __name__ == "__main__":
+    main()
